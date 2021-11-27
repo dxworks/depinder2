@@ -1,4 +1,4 @@
-# Dxworks new-project
+# Dxworks depinder
 
 This project wa
 
@@ -7,17 +7,17 @@ This project wa
 Use `npm` to install
 
 ```bash
-npm i -g @dxworks/new-project
+npm i -g @dxworks/depinder
 ```
 
 ## Usage
 
 ```shell
-dx-new-project
+dx-depinder
 ```
 or
 ```shell
-dxw new-project
+dxw depinder
 ```
 
 ## Contributing
