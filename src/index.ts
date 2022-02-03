@@ -3,4 +3,4 @@
 import {mainCommand} from './depinder'
 
 mainCommand
-  .parse(process.argv)
+    .parse(process.argv)
