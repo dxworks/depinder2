@@ -10,6 +10,8 @@ import path from 'path'
 import {SemVer} from 'semver'
 import {DepTreeDep} from 'snyk-nodejs-lockfile-parser/dist/parsers'
 import {log} from '@dxworks/cli-common'
+import {LibraryInfo, Registrar} from '../../extension-points/registrar'
+import {json} from 'npm-registry-fetch'
 
 const extractor: Extractor = {
     files: () => ['package.json', 'package-lock.json', 'yarn.lock'],
@@ -105,7 +107,9 @@ async function parseLockFile({root, manifestFile, lockFile}: DependencyFileConte
     }
 }
 
-async function parseLockFileNonRecursively({root, manifestFile, lockFile}: DependencyFileContext): Promise<DepinderProject> {
+async function parseLockFileNonRecursively(
+    {root, manifestFile, lockFile}: DependencyFileContext): Promise<DepinderProject> {
+
     const result = await buildDepTreeFromFiles(root, manifestFile ?? 'package.json', lockFile, true)
 
     return {
@@ -116,10 +120,35 @@ async function parseLockFileNonRecursively({root, manifestFile, lockFile}: Depen
     }
 }
 
+export async function retrieveFromNpm(libraryName: string): Promise<LibraryInfo> {
+    const response: any = await json(libraryName)
+    console.log(response)
+    return {
+        name: response.name,
+        versions: Object.values(response.versions).map((it: any) => {
+            return {
+                version: it.version,
+                timestamp: Date.parse(response.time[it.version]),
+                license: it.license,
+                latest: it.version == response['dist-tags']?.latest,
+            }
+        }),
+        description: response.description,
+        issuesUrl: [],
+        licenses: [response.license],
+        reposUrl: [],
+        keywords: response.keywords,
+    }
+}
+
+const registrar: Registrar = {
+    retrieve: retrieveFromNpm,
+}
 
 export const javascript = {
     extractor,
     parser,
     parser2,
+    registrar,
 }
 
