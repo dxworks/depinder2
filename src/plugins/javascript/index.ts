@@ -12,6 +12,8 @@ import {DepTreeDep} from 'snyk-nodejs-lockfile-parser/dist/parsers'
 import {log} from '@dxworks/cli-common'
 import {LibraryInfo, Registrar} from '../../extension-points/registrar'
 import {json} from 'npm-registry-fetch'
+import {VulnerabilityChecker} from '../../extension-points/vulnerability-checker'
+import {Plugin} from '../../extension-points/plugin'
 
 const extractor: Extractor = {
     files: () => ['package.json', 'package-lock.json', 'yarn.lock'],
@@ -129,7 +131,7 @@ export async function retrieveFromNpm(libraryName: string): Promise<LibraryInfo>
             return {
                 version: it.version,
                 timestamp: Date.parse(response.time[it.version]),
-                license: it.license,
+                licenses: it.license,
                 latest: it.version == response['dist-tags']?.latest,
             }
         }),
@@ -145,10 +147,15 @@ const registrar: Registrar = {
     retrieve: retrieveFromNpm,
 }
 
-export const javascript = {
+const checker: VulnerabilityChecker = {
+    githubSecurityAdvisoryEcosystem: 'NPM',
+    getPURL: (lib, ver) => `pkg:npm/${lib.replace('@', '%40')}@${ver}`,
+}
+
+export const javascript: Plugin = {
     extractor,
     parser,
-    parser2,
     registrar,
+    checker,
 }
 

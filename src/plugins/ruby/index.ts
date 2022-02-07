@@ -9,6 +9,9 @@ import {
 import * as gemfile from '@snyk/gemfile'
 import path from 'path'
 import semver from 'semver/preload'
+import {LibraryInfo, Registrar} from '../../extension-points/registrar'
+import fetch from 'node-fetch'
+import {VulnerabilityChecker} from '../../extension-points/vulnerability-checker'
 
 const extractor: Extractor = {
     files: () => ['Gemfile', '*.gemspec', 'Gemfile.lock'],
@@ -73,8 +76,50 @@ function parseLockFile({root, lockFile}: DependencyFileContext): DepinderProject
     }
 }
 
+export async function retrieveFormRubyGems(libraryName: string): Promise<LibraryInfo> {
+    const gemResponse: any = await fetch(`https://rubygems.org/api/v1/gems/${libraryName}.json`)
+    const versionsResponse: any = await fetch(`https://rubygems.org/api/v1/versions/${libraryName}.json`)
+    const gemData = await gemResponse.json()
+    const versionsData = await versionsResponse.json()
+    console.log(gemData)
+    return {
+        name: gemData.name,
+        versions: versionsData.map((it: any) => {
+            return {
+                version: it.number,
+                timestamp: Date.parse(it.created_at),
+                buildAt: Date.parse(it.built_at),
+                licenses: it.licenses,
+                latest: it.number == gemData.version,
+                rubyVersion: it.ruby_version,
+                rubygemsVersion: it.rubygems_version,
+            }
+        }),
+        description: gemData.info,
+        issuesUrl: [gemData.metadata.bug_tracker_uri],
+        licenses: gemData.licenses,
+        reposUrl: [gemData.metadata.source_code_uri],
+        documentationUrl: gemData.metadata.documentation_uri,
+        homepageUrl: gemData.homepage_uri,
+        packageUrl: gemData.gem_uri,
+        keywords: [],
+        downloads: gemData.downloads,
+    }
+}
+
+const registrar: Registrar = {
+    retrieve: retrieveFormRubyGems,
+}
+
+const checker: VulnerabilityChecker = {
+    githubSecurityAdvisoryEcosystem: 'RUBYGEMS',
+    getPURL: (lib, ver) => `pkg:gem/${lib}@${ver}`,
+}
+
 export const ruby = {
     extractor,
     parser,
+    registrar,
+    checker,
 }
 

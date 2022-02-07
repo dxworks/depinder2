@@ -8,15 +8,21 @@ export type RegistryRetriever = (libraryName: string) => LibraryInfo | Promise<L
 interface LibraryVersion {
     version: string
     timestamp: number
-    license?: string
+    licenses?: string | string[]
+    downloads?: number
     latest: boolean
 }
 export interface LibraryInfo {
     name: string
     description?: string
     versions: LibraryVersion[]
-    reposUrl?: string[]
-    issuesUrl?: string[]
     licenses: string[]
-    keywords: string[]
+    keywords?: string[]
+    issuesUrl?: string[]
+    reposUrl?: string[]
+    homepageUrl?: string
+    documentationUrl?: string
+    packageUrl?: string
+    downloads?: number
+    authors?: string[]
 }
