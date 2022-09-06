@@ -16,87 +16,61 @@ import {VulnerabilityChecker} from '../../extension-points/vulnerability-checker
 import {Plugin} from '../../extension-points/plugin'
 
 const extractor: Extractor = {
-    files: () => ['package.json', 'package-lock.json', 'yarn.lock'],
-    lockCommand: () => {
-        return ''
+    files: ['package.json', 'package-lock.json', 'yarn.lock'],
+    createContexts: files => {
+        const packageLocks = files.filter(it => it.endsWith('package-lock.json')).map(it => ({
+            root: path.dirname(it),
+            lockFile: path.basename(it),
+            manifestFile: 'package.json',
+        } as DependencyFileContext))
+
+        const yarnLocks = files.filter(it => it.endsWith('yarn.lock')).map(it => ({
+            root: path.dirname(it),
+            lockFile: path.basename(it),
+            manifestFile: 'package.json',
+        } as DependencyFileContext))
+
+        return [...packageLocks, ...yarnLocks]
     },
+    filter: it => !it.includes('node_modules'),
 }
 
 const parser: Parser = {
     parseDependencyTree: parseLockFile,
 }
 
-const parser2: Parser = {
-    parseDependencyTree: parseLockFileNonRecursively,
-}
-
-function recursivelyTransformDeps(tree: DepTreeDep, result: { [p: string]: DepinderDependency }) {
+function recursivelyTransformDeps(tree: DepTreeDep, result: Map<string, DepinderDependency>) {
     const rootId = `${tree.name}@${tree.version}`
     Object.values(tree.dependencies ?? {}).forEach(dep => {
         const id = `${dep.name}@${dep.version}`
-        const cachedVersion = result[id]
+        const cachedVersion = result.get(id)
         if (cachedVersion) {
-            cachedVersion.requestedBy = [...cachedVersion.requestedBy, {
-                id: rootId,
-                requestedVersion: dep.version ?? '',
-            }]
+            cachedVersion.requestedBy[rootId] = dep.version ?? ''
         } else {
-            result[id] = {
-                id,
-                version: dep.version,
-                name: dep.name,
-                semver: new SemVer(dep.version ?? '', true),
-                requestedBy: [{id: rootId, requestedVersion: dep.version}],
-            } as DepinderDependency
+            try {
+                const semver = new SemVer(dep.version ?? '', true)
+                result.set(id, {
+                    id,
+                    version: dep.version,
+                    name: dep.name,
+                    semver: semver,
+                    requestedBy: {[rootId]: dep.version},
+                } as DepinderDependency)
+            } catch (e) {
+                log.warn(`Invalid version! ${e}`)
+            }
         }
         recursivelyTransformDeps(dep, result)
     })
 }
 
-function transformDeps(tree: DepTreeDep) {
-    log.info('Starting recursive transformation...')
-    const result: { [id: string]: DepinderDependency } = {}
+function transformDeps(tree: DepTreeDep, root: string): Map<string, DepinderDependency> {
+    log.info(`Starting recursive transformation for ${root}`)
+    const result: Map<string, DepinderDependency> = new Map<string, DepinderDependency>()
     recursivelyTransformDeps(tree, result)
-    log.info('End recursive transformation...')
+    log.info(`End recursive transformation for ${root}.`)
     return result
 }
-
-function transformDepsNoRecurse(tree: DepTreeDep) {
-    log.info('Starting non-recursive transformation...')
-
-    const result: { [id: string]: DepinderDependency } = {}
-
-    const rootId = `${tree.name}@${tree.version}`
-
-    let trees: DepTreeDep[] = [tree]
-
-    while (trees.length > 0) {
-        trees = trees.flatMap(it => Object.values(it.dependencies ?? {})).map(dep => {
-            const id = `${dep.name}@${dep.version}`
-            const cachedVersion = result[id]
-            if (cachedVersion) {
-                cachedVersion.requestedBy = [...cachedVersion.requestedBy, {
-                    id: rootId,
-                    requestedVersion: dep.version ?? '',
-                }]
-            } else {
-                result[id] = {
-                    id,
-                    version: dep.version,
-                    name: dep.name,
-                    semver: new SemVer(dep.version ?? '', true),
-                    requestedBy: [{id: rootId, requestedVersion: dep.version}],
-                } as DepinderDependency
-            }
-
-            return dep
-        }).filter(it => it) as DepTreeDep[]
-
-    }
-    log.info('End non-recursive transformation...')
-    return result
-}
-
 async function parseLockFile({root, manifestFile, lockFile}: DependencyFileContext): Promise<DepinderProject> {
     log.info(`parsing ${path.resolve(root, lockFile)}`)
     const result = await buildDepTreeFromFiles(root, manifestFile ?? 'package.json', lockFile, true)
@@ -105,26 +79,13 @@ async function parseLockFile({root, manifestFile, lockFile}: DependencyFileConte
         path: path.resolve(root, manifestFile ?? 'package.json'),
         name: path.basename(root),
         version: '',
-        dependencies: transformDeps(result),
-    }
-}
-
-async function parseLockFileNonRecursively(
-    {root, manifestFile, lockFile}: DependencyFileContext): Promise<DepinderProject> {
-
-    const result = await buildDepTreeFromFiles(root, manifestFile ?? 'package.json', lockFile, true)
-
-    return {
-        path: path.resolve(root, manifestFile ?? 'package.json'),
-        name: path.basename(root),
-        version: '',
-        dependencies: transformDepsNoRecurse(result),
+        dependencies: Object.fromEntries(transformDeps(result, root)),
     }
 }
 
 export async function retrieveFromNpm(libraryName: string): Promise<LibraryInfo> {
     const response: any = await json(libraryName)
-    console.log(response)
+
     return {
         name: response.name,
         versions: Object.values(response.versions).map((it: any) => {
@@ -153,6 +114,7 @@ const checker: VulnerabilityChecker = {
 }
 
 export const javascript: Plugin = {
+    name: 'javascript',
     extractor,
     parser,
     registrar,

@@ -1,6 +1,7 @@
+import {Vulnerability} from './vulnerability-checker'
 
 export interface Registrar {
-    retrieve?: RegistryRetriever
+    retrieve: RegistryRetriever
 }
 
 export type RegistryRetriever = (libraryName: string) => LibraryInfo | Promise<LibraryInfo>
@@ -24,5 +25,7 @@ export interface LibraryInfo {
     documentationUrl?: string
     packageUrl?: string
     downloads?: number
-    authors?: string[]
+    authors?: string[],
+    vulnerabilities?: Vulnerability[]
+    requiresLicenseAcceptance?: boolean
 }

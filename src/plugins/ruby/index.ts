@@ -12,12 +12,15 @@ import semver from 'semver/preload'
 import {LibraryInfo, Registrar} from '../../extension-points/registrar'
 import fetch from 'node-fetch'
 import {VulnerabilityChecker} from '../../extension-points/vulnerability-checker'
+import {Plugin} from '../../extension-points/plugin'
 
 const extractor: Extractor = {
-    files: () => ['Gemfile', '*.gemspec', 'Gemfile.lock'],
-    lockCommand: () => {
-        return ''
-    },
+    files: ['Gemfile', '.*\\.gemspec', 'Gemfile.lock'],
+    createContexts: files =>
+        files.filter(it => it.endsWith('Gemfile.lock')).map(it => ({
+            root: path.dirname(it),
+            lockFile: path.basename(it),
+        } as DependencyFileContext)),
 }
 
 const parser: Parser = {
@@ -39,7 +42,7 @@ function transformDeps(tree: any) {
             version: value.version,
             semver: semver.coerce(value.version),
             type: value.type,
-            requestedBy: [],
+            requestedBy: {},
         } as DepinderDependency
     })
 
@@ -49,7 +52,7 @@ function transformDeps(tree: any) {
         Object.keys(value).filter(it => !['version', 'remote', 'type'].includes(it)).forEach(spec => {
             const cachedValue = result[spec] as DepinderDependency
             if (cachedValue) {
-                cachedValue.requestedBy = [...cachedValue.requestedBy, {id, requestedVersion: value[spec].version}]
+                cachedValue.requestedBy[id] = value[spec].version
             }
         })
     })
@@ -73,16 +76,22 @@ function parseLockFile({root, lockFile}: DependencyFileContext): DepinderProject
         path: root,
         version: '',
         dependencies: transformDeps(result),
-    }
+    } as DepinderProject
 }
 
+const registrarCache: Map<string, LibraryInfo> = new Map<string, LibraryInfo>()
+
 export async function retrieveFormRubyGems(libraryName: string): Promise<LibraryInfo> {
+    if(registrarCache.has(libraryName))
+        // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
+        return registrarCache.get(libraryName)!
+
     const gemResponse: any = await fetch(`https://rubygems.org/api/v1/gems/${libraryName}.json`)
-    const versionsResponse: any = await fetch(`https://rubygems.org/api/v1/versions/${libraryName}.json`)
     const gemData = await gemResponse.json()
+    const versionsResponse: any = await fetch(`https://rubygems.org/api/v1/versions/${libraryName}.json`)
     const versionsData = await versionsResponse.json()
-    console.log(gemData)
-    return {
+
+    const libInfo =  {
         name: gemData.name,
         versions: versionsData.map((it: any) => {
             return {
@@ -105,6 +114,9 @@ export async function retrieveFormRubyGems(libraryName: string): Promise<Library
         keywords: [],
         downloads: gemData.downloads,
     }
+    registrarCache.set(libraryName, libInfo)
+
+    return libInfo
 }
 
 const registrar: Registrar = {
@@ -116,7 +128,8 @@ const checker: VulnerabilityChecker = {
     getPURL: (lib, ver) => `pkg:gem/${lib}@${ver}`,
 }
 
-export const ruby = {
+export const ruby: Plugin = {
+    name: 'ruby',
     extractor,
     parser,
     registrar,

@@ -1,5 +1,9 @@
-describe('default test', () => {
-  it('should pass', () => {
-    // ...
-  })
+import {walkDir} from '../src/commands/analyse'
+
+describe('walk dir test', () => {
+    it('should walk the entire dir', () => {
+        const files = walkDir('.')
+
+        expect(files.length).toBeGreaterThan(20)
+    })
 })

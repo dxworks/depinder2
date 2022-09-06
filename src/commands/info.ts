@@ -1,12 +1,9 @@
 import {Command} from 'commander'
-import {_package} from '../utils'
 import {ComposerPackage, parseComposerFile, parseComposerLockFile} from '../info/php/parser'
 import path from 'path'
 import * as fs from 'fs'
 import {getPackageDetails} from '../info/php/info'
 import _ from 'lodash'
-import {getVulnerabilitiesFromGithub} from './vulnerabilities'
-import {Range, SemVer} from 'semver'
 import moment from 'moment'
 import spdxCorrect from 'spdx-correct'
 // eslint-disable-next-line @typescript-eslint/no-var-requires
@@ -15,7 +12,6 @@ const licenseIds = require('spdx-license-ids/')
 
 export const infoCommand = new Command()
     .name('info')
-    .description(_package.description)
     .argument('[composerFiles...]', 'A list of composer.json or composer.lock files, or folder to search for such files')
     .action(getInfoForFiles)
 
@@ -100,20 +96,20 @@ export async function getDeps(composerFiles: string[]): Promise<{ file: string, 
         return `${l},${allLicenses[l].length},${allLicenses[l].map(it => it.name)}`
     }).join('\n'))
 
-    for (const p of foundPackages) {
-        const githubResponse = await getVulnerabilitiesFromGithub('COMPOSER', p.name)
-        const vulnerabilities = githubResponse.securityVulnerabilities.nodes.filter((it: any) => {
-            try {
-                const semver = new SemVer(p.version || '', true)
-                const range = new Range(it.vulnerableVersionRange)
-                return range.test(semver)
-            } catch (e: any) {
-                return false
-            }
-        })
-        p.vulnerabilities = vulnerabilities || []
-        p.allVulnerabilities = githubResponse.securityVulnerabilities.nodes
-    }
+    // for (const p of foundPackages) {
+    //     const githubResponse = await getVulnerabilitiesFromGithub('COMPOSER', p.name)
+    //     const vulnerabilities = githubResponse.securityVulnerabilities.nodes.filter((it: any) => {
+    //         try {
+    //             const semver = new SemVer(p.version || '', true)
+    //             const range = new Range(it.vulnerableVersionRange)
+    //             return range.test(semver)
+    //         } catch (e: any) {
+    //             return false
+    //         }
+    //     })
+    //     p.vulnerabilities = vulnerabilities || []
+    //     p.allVulnerabilities = githubResponse.securityVulnerabilities.nodes
+    // }
     // const sonatypeVulnerabilities = await Promise.all(_.chunk(foundPackages, 128).map(chunk => {
     //     getVulnerabilitiesFromSonatype(chunk.map(it => getPurl(it)))
     // }))
