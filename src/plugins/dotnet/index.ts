@@ -1,7 +1,7 @@
 import axios from 'axios'
 import {Plugin} from '../../extension-points/plugin'
 import {LibraryInfo, Registrar} from '../../extension-points/registrar'
-import {Extractor} from '../../extension-points/extract'
+import {DependencyFileContext, DepinderProject, Extractor, Parser} from '../../extension-points/extract'
 import {VulnerabilityChecker} from '../../extension-points/vulnerability-checker'
 import moment from 'moment'
 
@@ -48,9 +48,22 @@ const extractor: Extractor = {
     createContexts: () => [],
 }
 
-// const parser: Parser = {
-//     parseDependencyTree: context =>
-// }
+function runNugetInspector(context: DependencyFileContext): DepinderProject {
+
+
+    return {
+        version:'',
+        dependencies: {},
+        name: '',
+        path: '',
+    }
+}
+
+
+
+const parser: Parser = {
+    parseDependencyTree: runNugetInspector,
+}
 
 const checker: VulnerabilityChecker = {
     githubSecurityAdvisoryEcosystem: 'NUGET',

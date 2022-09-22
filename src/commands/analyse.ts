@@ -5,7 +5,7 @@ import {plugins} from '../plugins'
 import {DepinderDependency, DepinderProject} from '../extension-points/extract'
 import {log} from '@dxworks/cli-common'
 import {LibraryInfo} from '../extension-points/registrar'
-import {getVulnerabilitiesFromGithub} from './vulnerabilities'
+import {getVulnerabilitiesFromGithub} from '../utils/vulnerabilities'
 import {Range} from 'semver'
 import _ from 'lodash'
 import spdxCorrect from 'spdx-correct'
@@ -17,6 +17,7 @@ const licenseIds = require('spdx-license-ids/')
 export const analyseCommand = new Command()
     .name('analyse')
     .argument('[folders...]', 'A list of folders to walk for files')
+    .option('[folders...]', 'A list of folders to walk for files')
     .action(analyseFiles)
 
 export function walkDir(dir: string): string[] {
@@ -121,12 +122,12 @@ export async function analyseFiles(folders: string[]): Promise<void> {
             return license
         })
 
-        fs.writeFileSync(path.resolve(process.cwd(), 'results-js', `${plugin.name}-licenses.csv`), Object.keys(allLicenses).map(l => {
+        fs.writeFileSync(path.resolve(process.cwd(), 'results', `${plugin.name}-licenses.csv`), Object.keys(allLicenses).map(l => {
             return `${l},${allLicenses[l].length},${allLicenses[l].map((it: any) => it.name)}`
         }).join('\n'))
 
         const header = 'Project,Library,Used Version,Latest Version,Used Version Release Date,Latest Version Release Date,Latest-Used,Now-Used,Now-latest,Vulnerabilities,Vulnerability Details,DirectDependency,Type,Licenses\n'
-        fs.writeFileSync(path.resolve(process.cwd(), 'results-js', `${plugin.name}-libs.csv`), header + projects.flatMap(proj =>
+        fs.writeFileSync(path.resolve(process.cwd(), 'results', `${plugin.name}-libs.csv`), header + projects.flatMap(proj =>
             Object.values(proj.dependencies).map(dep => convertDepToRow(proj, dep))).join('\n'))
     }
 

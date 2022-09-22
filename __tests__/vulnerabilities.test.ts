@@ -1,4 +1,4 @@
-import {getVulnerabilitiesFromGithub, getVulnerabilitiesFromSonatype} from '../src/commands/vulnerabilities'
+import {getVulnerabilitiesFromGithub, getVulnerabilitiesFromSonatype} from '../src/utils/vulnerabilities'
 
 describe('test vulnerabilities from Github', () => {
     it('get vulnerabilities for php', async () => {
@@ -45,7 +45,7 @@ describe('test vulnerabilities from Sonatype', () => {
         expect(result).toBeTruthy()
     })
 
-    it('get vulnerabilities for npm', async () => {
+    it('get vulnerabilities for ruby', async () => {
         const result = await getVulnerabilitiesFromSonatype(['pkg:gem/rails@0.5.0'])
 
         console.log(JSON.stringify(result))
