@@ -17,7 +17,7 @@ const licenseIds = require('spdx-license-ids/')
 export const analyseCommand = new Command()
     .name('analyse')
     .argument('[folders...]', 'A list of folders to walk for files')
-    .option('[folders...]', 'A list of folders to walk for files')
+    .option('--results, -r', 'The results folder', 'results')
     .action(analyseFiles)
 
 export function walkDir(dir: string): string[] {
@@ -35,20 +35,19 @@ function convertDepToRow(proj: DepinderProject, dep: DepinderDependency): string
 
     const dateFormat = 'MMM YYYY'
     const vulnerabilities = dep.vulnerabilities?.map(v => `${v.severity} - ${v.permalink}`).join('\n')
-    const directDep: boolean = !dep.requestedBy || Object.keys(dep.requestedBy).some(it => it.startsWith(proj.name))
-    return `${proj.name},${dep.name},${dep.version},${latestVersion?.version},${currentVersionMoment?.format(dateFormat)},${latestVersionMoment?.format(dateFormat)},${latestVersionMoment?.diff(currentVersionMoment, 'months')},${now?.diff(currentVersionMoment, 'months')},${now?.diff(latestVersionMoment, 'months')},${dep.vulnerabilities?.length},"${vulnerabilities}",${directDep},${dep.type},"${dep.libraryInfo?.licenses}"`
+    const directDep: boolean = !dep.requestedBy || Object.keys(dep.requestedBy).some(it => it.startsWith(`${proj.name}@${proj.version}`))
+    return `${proj.path},${proj.name},${dep.name},${dep.version},${latestVersion?.version},${currentVersionMoment?.format(dateFormat)},${latestVersionMoment?.format(dateFormat)},${latestVersionMoment?.diff(currentVersionMoment, 'months')},${now?.diff(currentVersionMoment, 'months')},${now?.diff(latestVersionMoment, 'months')},${dep.vulnerabilities?.length},"${vulnerabilities}",${directDep},${dep.type},"${dep.libraryInfo?.licenses}"`
 }
 
 async function extractProjects(plugin: Plugin, files: string[]) {
     return (await Promise.all(plugin.extractor.createContexts(files).flatMap(async context => {
         log.info(`Parsing dependency tree information for ${JSON.stringify(context)}`)
         try {
-            if(!plugin.parser){
+            if (!plugin.parser) {
                 log.info(`Plugin ${plugin.name} does not have a parser!`)
                 return null
             }
             const proj: DepinderProject = await plugin.parser.parseDependencyTree(context)
-            // fs.writeFileSync(path.resolve(process.cwd(), 'results-js', 'cache', `${plugin.name}-${proj.name}@${proj.version}.json`), JSON.stringify(proj))
             log.info(`Done parsing dependency tree information for ${JSON.stringify(context)}`)
             return proj
         } catch (e: any) {
@@ -61,16 +60,31 @@ async function extractProjects(plugin: Plugin, files: string[]) {
         .map(it => it as DepinderProject)
 }
 
-export async function analyseFiles(folders: string[]): Promise<void> {
+function loadCache(name: string): Map<string, LibraryInfo> {
+    const cacheFile = path.resolve(process.cwd(), 'cache', `${name}-libs.json`)
+    const json = JSON.parse(fs.readFileSync(cacheFile, 'utf8').toString())
+    return new Map(Object.entries(json))
+}
+
+export async function analyseFiles(folders: string[], options: { results: string }, useCache = true): Promise<void> {
+    const resultFolder = options.results
+    if (!fs.existsSync(path.resolve(process.cwd(), resultFolder))) {
+        fs.mkdirSync(path.resolve(process.cwd(), resultFolder), {recursive: true})
+        log.info('Creating results dir')
+    }
+    if (!fs.existsSync(path.resolve(process.cwd(), resultFolder, 'cache'))) {
+        fs.mkdirSync(path.resolve(process.cwd(), resultFolder, 'cache'), {recursive: true})
+        log.info('Creating results cache dir')
+    }
     const allFiles = folders.flatMap(it => walkDir(it))
 
     const allLibs: Map<string, Map<string, LibraryInfo>> = new Map<string, Map<string, LibraryInfo>>() // a map with all plugins as keys and a map of all libs as values
     for (const plugin of plugins) {
         log.info(`Plugin ${plugin.name} starting`)
-        const pluginLibMap = new Map<string, LibraryInfo>()
+        const pluginLibMap = useCache ? loadCache(plugin.name) : new Map<string, LibraryInfo>()
         allLibs.set(plugin.name, pluginLibMap)
 
-        const files = allFiles.filter(it => !plugin.extractor.filter?(it) : true).filter(it => plugin.extractor.files.some(pattern => it.match(pattern)))
+        const files = allFiles.filter(it => !plugin.extractor.filter ? (it) : true).filter(it => plugin.extractor.files.some(pattern => it.match(pattern)))
 
         const projects: DepinderProject[] = await extractProjects(plugin, files)
 
@@ -111,7 +125,7 @@ export async function analyseFiles(folders: string[]): Promise<void> {
         }
 
 
-        fs.writeFileSync(path.resolve(process.cwd(), 'results-js', 'cache', `${plugin.name}-libs.json`), JSON.stringify(Object.fromEntries(pluginLibMap)))
+        fs.writeFileSync(path.resolve(process.cwd(), resultFolder, 'cache', `${plugin.name}-libs.json`), JSON.stringify(Object.fromEntries(pluginLibMap)))
 
         const allLicenses = _.groupBy([...pluginLibMap.values()], (lib: LibraryInfo) => {
             const license: string | undefined = lib.versions.flatMap(it => it.licenses).find(() => true)
@@ -122,15 +136,59 @@ export async function analyseFiles(folders: string[]): Promise<void> {
             return license
         })
 
-        fs.writeFileSync(path.resolve(process.cwd(), 'results', `${plugin.name}-licenses.csv`), Object.keys(allLicenses).map(l => {
+        fs.writeFileSync(path.resolve(process.cwd(), resultFolder, `${plugin.name}-licenses.csv`), Object.keys(allLicenses).map(l => {
             return `${l},${allLicenses[l].length},${allLicenses[l].map((it: any) => it.name)}`
         }).join('\n'))
 
-        const header = 'Project,Library,Used Version,Latest Version,Used Version Release Date,Latest Version Release Date,Latest-Used,Now-Used,Now-latest,Vulnerabilities,Vulnerability Details,DirectDependency,Type,Licenses\n'
-        fs.writeFileSync(path.resolve(process.cwd(), 'results', `${plugin.name}-libs.csv`), header + projects.flatMap(proj =>
+        const header = 'Project Path,Project,Library,Used Version,Latest Version,Used Version Release Date,Latest Version Release Date,Latest-Used,Now-Used,Now-latest,Vulnerabilities,Vulnerability Details,DirectDependency,Type,Licenses\n'
+        fs.writeFileSync(path.resolve(process.cwd(), resultFolder, `${plugin.name}-libs.csv`), header + projects.flatMap(proj =>
             Object.values(proj.dependencies).map(dep => convertDepToRow(proj, dep))).join('\n'))
+
+
+        const projectStatsHeader = 'Project Path,Project,Direct Deps,Indirect Deps,Direct Outdated Deps, Direct Outdated %,Indirect Outdated Deps, Indirect Outdated %, Direct Vulnerable Deps, Indirect Vulnerable Deps, Direct Out of Support, Indirect Out of Support\n'
+        fs.writeFileSync(path.resolve(process.cwd(), resultFolder, `${plugin.name}-project-stats.csv`), projectStatsHeader +projects.map(proj => {
+            const enhancedDeps: DependencyInfo[] = Object.values(proj.dependencies).map(dep => {
+                const latestVersion = dep.libraryInfo?.versions.find(it => it.latest)
+                const currentVersion = dep.libraryInfo?.versions.find(it => it.version == dep.version)
+                const latestVersionMoment = moment(latestVersion?.timestamp)
+                const currentVersionMoment = moment(currentVersion?.timestamp)
+                const now = moment()
+                const directDep: boolean = !dep.requestedBy || Object.keys(dep.requestedBy).some(it => it.startsWith(`${proj.name}@${proj.version}`))
+
+                return {...dep,
+                    direct: directDep,
+                    latest_used: latestVersionMoment.diff(currentVersionMoment, 'months'),
+                    now_used: now.diff(currentVersionMoment, 'months'),
+                    now_latest: now.diff(latestVersionMoment, 'months'),
+                } as DependencyInfo
+            })
+            const directDeps = enhancedDeps.filter(dep => dep.direct)
+            const indirectDeps = enhancedDeps.filter(dep => !dep.direct)
+
+            const outdatedThreshold = 15
+
+            const directOutdated = directDeps.filter(dep => dep.latest_used > outdatedThreshold)
+            const directOutDatedPercent = directOutdated.length / directDeps.length * 100
+            const indirectOutdated = indirectDeps.filter(dep => dep.latest_used > outdatedThreshold)
+            const indirectOutDatedPercent = indirectOutdated.length / indirectDeps.length * 100
+            const directVulnerable = directDeps.filter(dep => dep.vulnerabilities && dep.vulnerabilities.length > 0)
+            const indirectVulnerable = indirectDeps.filter(dep => dep.vulnerabilities && dep.vulnerabilities.length > 0)
+
+            const outOfSupportThreshold = 24
+            const directOutOfSupport = directDeps.filter(dep => dep.now_latest > outOfSupportThreshold)
+            const indirectOutOfSupport = indirectDeps.filter(dep => dep.now_latest > outOfSupportThreshold)
+
+            return `${proj.path},${proj.name},${directDeps.length},${indirectDeps.length},${directOutdated.length},${directOutDatedPercent},${indirectOutdated.length},${indirectOutDatedPercent},${directVulnerable.length},${indirectVulnerable.length},${directOutOfSupport.length},${indirectOutOfSupport.length}`
+        }).join('\n'))
     }
 
     log.info('Done')
+}
+
+interface DependencyInfo extends DepinderDependency {
+    direct: boolean
+    latest_used: number
+    now_used: number
+    now_latest: number
 }
 

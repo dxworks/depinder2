@@ -120,4 +120,5 @@ dist
 *.iml
 
 # custom
-results0
+results-*
+cache

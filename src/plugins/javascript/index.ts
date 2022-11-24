@@ -14,23 +14,43 @@ import {LibraryInfo, Registrar} from '../../extension-points/registrar'
 import {json} from 'npm-registry-fetch'
 import {VulnerabilityChecker} from '../../extension-points/vulnerability-checker'
 import {Plugin} from '../../extension-points/plugin'
+import {npm} from '../../utils/npm'
+import fs from 'fs'
 
 const extractor: Extractor = {
     files: ['package.json', 'package-lock.json', 'yarn.lock'],
     createContexts: files => {
-        const packageLocks = files.filter(it => it.endsWith('package-lock.json')).map(it => ({
+        const lockFileContexts = files.filter(it => it.endsWith('package-lock.json') || it.endsWith('yarn.lock')).map(it => ({
             root: path.dirname(it),
             lockFile: path.basename(it),
             manifestFile: 'package.json',
         } as DependencyFileContext))
 
-        const yarnLocks = files.filter(it => it.endsWith('yarn.lock')).map(it => ({
-            root: path.dirname(it),
-            lockFile: path.basename(it),
-            manifestFile: 'package.json',
-        } as DependencyFileContext))
+        const justPackageJson = files.filter(it => it.endsWith('package.json'))
+            .filter(packageFile => !lockFileContexts.some(it => it.root == path.dirname(packageFile)))
+            .map(it => ({
+                root: path.dirname(it),
+                manifestFile: 'package.json',
+            } as DependencyFileContext))
+            .map(context => {
+                try {
+                    log.info(`Trying to generate lock file for ${context.root}`)
+                npm.install('', '--package-lock-only', context.root)
+                return {
+                    ...context,
+                    lockFile: path.resolve(context.root, 'package-lock.json'),
+                }
+                }
+                catch (e: any)
+                {
+                    log.error(e)
+                    return null
+                }
+            })
+            .filter(it => it !== null)
+            .map(it => it as DependencyFileContext)
 
-        return [...packageLocks, ...yarnLocks]
+        return [...lockFileContexts, ...justPackageJson]
     },
     filter: it => !it.includes('node_modules'),
 }
@@ -71,14 +91,16 @@ function transformDeps(tree: DepTreeDep, root: string): Map<string, DepinderDepe
     log.info(`End recursive transformation for ${root}.`)
     return result
 }
-async function parseLockFile({root, manifestFile, lockFile}: DependencyFileContext): Promise<DepinderProject> {
-    log.info(`parsing ${path.resolve(root, lockFile)}`)
-    const result = await buildDepTreeFromFiles(root, manifestFile ?? 'package.json', lockFile, true)
 
+async function parseLockFile({root, manifestFile, lockFile}: DependencyFileContext): Promise<DepinderProject> {
+    // log.info(`parsing ${path.resolve(root, lockFile)}`)
+    const result = await buildDepTreeFromFiles(root, manifestFile ?? 'package.json', lockFile ?? '', true)
+
+    const manifestJSON = JSON.parse(fs.readFileSync(path.resolve(root, manifestFile ?? 'package.json'), 'utf8'))
     return {
         path: path.resolve(root, manifestFile ?? 'package.json'),
-        name: path.basename(root),
-        version: '',
+        name: result.name ?? manifestJSON.name,
+        version: result.version ?? manifestJSON.version,
         dependencies: Object.fromEntries(transformDeps(result, root)),
     }
 }

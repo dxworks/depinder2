@@ -5,6 +5,11 @@ import {DependencyFileContext, DepinderProject, Extractor, Parser} from '../../e
 import {VulnerabilityChecker} from '../../extension-points/vulnerability-checker'
 import moment from 'moment'
 
+import tmp from 'tmp'
+
+import {runNugetInspectorProgrammatically} from '@dxworks/nuget-inspector'
+import fs from 'fs'
+
 
 export async function retrieveNugetInfo(
     packageName: string
@@ -48,17 +53,19 @@ const extractor: Extractor = {
     createContexts: () => [],
 }
 
-function runNugetInspector(context: DependencyFileContext): DepinderProject {
+async function runNugetInspector(context: DependencyFileContext): Promise<DepinderProject> {
 
+    const tempFile = tmp.fileSync()
+    // await runNugetInspectorProgrammatically(context.root, tempFile.name, process.cwd())
+    console.log(JSON.parse(fs.readFileSync(tempFile.name).toString()))
 
     return {
-        version:'',
+        version: '',
         dependencies: {},
         name: '',
         path: '',
     }
 }
-
 
 
 const parser: Parser = {
