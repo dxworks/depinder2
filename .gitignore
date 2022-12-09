@@ -121,4 +121,4 @@ dist
 
 # custom
 results-*
-cache
+./cache

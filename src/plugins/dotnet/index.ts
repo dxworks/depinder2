@@ -7,7 +7,7 @@ import moment from 'moment'
 
 import tmp from 'tmp'
 
-import {runNugetInspectorProgrammatically} from '@dxworks/nuget-inspector'
+// import {runNugetInspectorProgrammatically} from '@dxworks/nuget-inspector'
 import fs from 'fs'
 
 

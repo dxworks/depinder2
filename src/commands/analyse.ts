@@ -11,6 +11,11 @@ import _ from 'lodash'
 import spdxCorrect from 'spdx-correct'
 import moment from 'moment'
 import {Plugin} from '../extension-points/plugin'
+import {Cache, noCache} from '../cache/cache'
+import {getRedisDockerContainerStatus} from './redis'
+import {jsonCache} from '../cache/json-cache'
+import {redisCache} from '../cache/redis-cache'
+import {Vulnerability} from '../extension-points/vulnerability-checker'
 // eslint-disable-next-line @typescript-eslint/no-var-requires
 const licenseIds = require('spdx-license-ids/')
 
@@ -60,10 +65,12 @@ async function extractProjects(plugin: Plugin, files: string[]) {
         .map(it => it as DepinderProject)
 }
 
-function loadCache(name: string): Map<string, LibraryInfo> {
-    const cacheFile = path.resolve(process.cwd(), 'cache', `${name}-libs.json`)
-    const json = JSON.parse(fs.readFileSync(cacheFile, 'utf8').toString())
-    return new Map(Object.entries(json))
+function chooseCacheOption(): Cache {
+    if (getRedisDockerContainerStatus() != 'running') {
+        log.warn('Redis is not running, using in-memory cache')
+        return jsonCache
+    }
+    return redisCache
 }
 
 export async function analyseFiles(folders: string[], options: { results: string }, useCache = true): Promise<void> {
@@ -72,17 +79,13 @@ export async function analyseFiles(folders: string[], options: { results: string
         fs.mkdirSync(path.resolve(process.cwd(), resultFolder), {recursive: true})
         log.info('Creating results dir')
     }
-    if (!fs.existsSync(path.resolve(process.cwd(), resultFolder, 'cache'))) {
-        fs.mkdirSync(path.resolve(process.cwd(), resultFolder, 'cache'), {recursive: true})
-        log.info('Creating results cache dir')
-    }
     const allFiles = folders.flatMap(it => walkDir(it))
 
-    const allLibs: Map<string, Map<string, LibraryInfo>> = new Map<string, Map<string, LibraryInfo>>() // a map with all plugins as keys and a map of all libs as values
     for (const plugin of plugins) {
         log.info(`Plugin ${plugin.name} starting`)
-        const pluginLibMap = useCache ? loadCache(plugin.name) : new Map<string, LibraryInfo>()
-        allLibs.set(plugin.name, pluginLibMap)
+
+        const cache: Cache = useCache ? chooseCacheOption() : noCache
+        cache.load()
 
         const files = allFiles.filter(it => !plugin.extractor.filter ? (it) : true).filter(it => plugin.extractor.files.some(pattern => it.match(pattern)))
 
@@ -93,9 +96,8 @@ export async function analyseFiles(folders: string[], options: { results: string
             for (const dep of Object.values(project.dependencies)) {
                 try {
                     let lib
-                    if (pluginLibMap.has(dep.name)) {
-                        // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
-                        lib = pluginLibMap.get(dep.name)!
+                    if (await cache.has(`${plugin.name}:${dep.name}`)) {
+                        lib = await cache.get(`${plugin.name}:${dep.name}`) as LibraryInfo
                     } else {
                         log.info(`Getting remote information on ${dep.name}`)
 
@@ -104,10 +106,10 @@ export async function analyseFiles(folders: string[], options: { results: string
                             log.info(`Getting vulnerabilities for ${lib.name}`)
                             lib.vulnerabilities = await getVulnerabilitiesFromGithub(plugin.checker.githubSecurityAdvisoryEcosystem, lib.name)
                         }
-                        pluginLibMap.set(dep.name, lib)
+                        await cache.set(`${plugin.name}:${dep.name}`, lib)
                     }
                     dep.libraryInfo = lib
-                    const thisVersionVulnerabilities = lib.vulnerabilities?.filter(it => {
+                    const thisVersionVulnerabilities = lib.vulnerabilities?.filter((it: Vulnerability) => {
                         try {
                             // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
                             const range = new Range(it.vulnerableRange?.replaceAll(',', ' ') ?? '')
@@ -124,10 +126,11 @@ export async function analyseFiles(folders: string[], options: { results: string
             }
         }
 
+        await cache.write()
 
-        fs.writeFileSync(path.resolve(process.cwd(), resultFolder, 'cache', `${plugin.name}-libs.json`), JSON.stringify(Object.fromEntries(pluginLibMap)))
+        const allLibsInfo = projects.flatMap(proj => Object.values(proj.dependencies).map(dep => dep.libraryInfo))
 
-        const allLicenses = _.groupBy([...pluginLibMap.values()], (lib: LibraryInfo) => {
+        const allLicenses = _.groupBy(allLibsInfo, (lib: LibraryInfo) => {
             const license: string | undefined = lib.versions.flatMap(it => it.licenses).find(() => true)
             if (!license || typeof license !== 'string')
                 return 'unknown'
@@ -146,7 +149,7 @@ export async function analyseFiles(folders: string[], options: { results: string
 
 
         const projectStatsHeader = 'Project Path,Project,Direct Deps,Indirect Deps,Direct Outdated Deps, Direct Outdated %,Indirect Outdated Deps, Indirect Outdated %, Direct Vulnerable Deps, Indirect Vulnerable Deps, Direct Out of Support, Indirect Out of Support\n'
-        fs.writeFileSync(path.resolve(process.cwd(), resultFolder, `${plugin.name}-project-stats.csv`), projectStatsHeader +projects.map(proj => {
+        fs.writeFileSync(path.resolve(process.cwd(), resultFolder, `${plugin.name}-project-stats.csv`), projectStatsHeader + projects.map(proj => {
             const enhancedDeps: DependencyInfo[] = Object.values(proj.dependencies).map(dep => {
                 const latestVersion = dep.libraryInfo?.versions.find(it => it.latest)
                 const currentVersion = dep.libraryInfo?.versions.find(it => it.version == dep.version)
@@ -155,7 +158,8 @@ export async function analyseFiles(folders: string[], options: { results: string
                 const now = moment()
                 const directDep: boolean = !dep.requestedBy || Object.keys(dep.requestedBy).some(it => it.startsWith(`${proj.name}@${proj.version}`))
 
-                return {...dep,
+                return {
+                    ...dep,
                     direct: directDep,
                     latest_used: latestVersionMoment.diff(currentVersionMoment, 'months'),
                     now_used: now.diff(currentVersionMoment, 'months'),
