@@ -10,7 +10,6 @@ describe('default test', () => {
 
     it('analyse dotnet files', async () => {
 
-        await analyseFiles(['/Users/mario/test-projects/depinder/depminer/constructed/dotnet'], {results: 'results'})
         console.log('done')
     })
 })
