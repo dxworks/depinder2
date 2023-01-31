@@ -1,4 +1,4 @@
-import {walkDir} from '../src/commands/analyse'
+import {walkDir} from '../src/utils/utils'
 
 describe('walk dir test', () => {
     it('should walk the entire dir', () => {

@@ -25,3 +25,9 @@ export function getHomeDir(): string {
     }
     return depinderFolder
 }
+
+export function walkDir(dir: string): string[] {
+    const allChildren = fs.readdirSync(dir)
+    const files = allChildren.map(it => path.resolve(dir, it)).filter(it => fs.lstatSync(it).isFile())
+    return [...files, ...allChildren.map(it => path.resolve(dir, it)).filter(it => fs.lstatSync(it).isDirectory()).flatMap(it => walkDir(path.resolve(dir, it)))]
+}

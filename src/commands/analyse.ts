@@ -17,6 +17,7 @@ import {jsonCache} from '../cache/json-cache'
 import {redisCache} from '../cache/redis-cache'
 import {Vulnerability} from '../extension-points/vulnerability-checker'
 import {MultiBar, Presets} from 'cli-progress'
+import {walkDir} from '../utils/utils'
 // eslint-disable-next-line @typescript-eslint/no-var-requires
 const licenseIds = require('spdx-license-ids/')
 
@@ -27,11 +28,6 @@ export const analyseCommand = new Command()
     .option('--results, -r', 'The results folder', 'results')
     .action(analyseFiles)
 
-export function walkDir(dir: string): string[] {
-    const allChildren = fs.readdirSync(dir)
-    const files = allChildren.map(it => path.resolve(dir, it)).filter(it => fs.lstatSync(it).isFile())
-    return [...files, ...allChildren.map(it => path.resolve(dir, it)).filter(it => fs.lstatSync(it).isDirectory()).flatMap(it => walkDir(path.resolve(dir, it)))]
-}
 
 function convertDepToRow(proj: DepinderProject, dep: DepinderDependency): string {
     const latestVersion = dep.libraryInfo?.versions.find(it => it.latest)
