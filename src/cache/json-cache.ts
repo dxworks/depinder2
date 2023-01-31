@@ -7,6 +7,10 @@ const CACHE_FILE_NAME = 'libs.json'
 
 function loadCache(): Map<string, LibraryInfo> {
     const cacheFile = path.resolve(process.cwd(), 'cache', CACHE_FILE_NAME)
+    if(!fs.existsSync(cacheFile)) {
+        fs.mkdirSync(path.resolve(process.cwd(), 'cache'), {recursive: true})
+        fs.writeFileSync(cacheFile, '{}')
+    }
     const json = JSON.parse(fs.readFileSync(cacheFile, 'utf8').toString())
     return new Map(Object.entries(json))
 }

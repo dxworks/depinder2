@@ -2,7 +2,7 @@ import {createClient} from 'redis'
 import {Cache} from './cache'
 
 const client = createClient({
-    url: process.env.REDIS_URL,
+    url: process.env.REDIS_URL ?? 'redis://localhost:6379',
 
 })
 client.on('error', (err) => console.log('Redis Client Error', err))
@@ -21,6 +21,7 @@ export const redisCache: Cache = {
         await client.connect()
     },
     async write() {
-        await client.disconnect()
+        // await client.disconnect()
+        await client.quit()
     },
 }

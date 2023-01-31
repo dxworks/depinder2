@@ -3,7 +3,6 @@ import axios from 'axios'
 import {Vulnerability} from '../extension-points/vulnerability-checker'
 
 export async function getVulnerabilitiesFromGithub(ecosystem: string, packageName: string): Promise<Vulnerability[]> {
-    console.log(`Getting vulnerabilities from Github for ${packageName}`)
     const authGraphql = graphql.defaults({
         headers: {
             authorization: `token ${process.env.GH_TOKEN}`,

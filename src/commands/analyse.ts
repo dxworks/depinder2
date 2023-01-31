@@ -16,12 +16,14 @@ import {getRedisDockerContainerStatus} from './redis'
 import {jsonCache} from '../cache/json-cache'
 import {redisCache} from '../cache/redis-cache'
 import {Vulnerability} from '../extension-points/vulnerability-checker'
+import {MultiBar, Presets} from 'cli-progress'
 // eslint-disable-next-line @typescript-eslint/no-var-requires
 const licenseIds = require('spdx-license-ids/')
 
 export const analyseCommand = new Command()
     .name('analyse')
     .argument('[folders...]', 'A list of folders to walk for files')
+    .argument('[depext-files...]', 'A list of files to parse for dependency information')
     .option('--results, -r', 'The results folder', 'results')
     .action(analyseFiles)
 
@@ -70,11 +72,12 @@ function chooseCacheOption(): Cache {
         log.warn('Redis is not running, using in-memory cache')
         return jsonCache
     }
+    log.info('Redis is running, using Redis cache')
     return redisCache
 }
 
 export async function analyseFiles(folders: string[], options: { results: string }, useCache = true): Promise<void> {
-    const resultFolder = options.results
+    const resultFolder = options.results || 'results'
     if (!fs.existsSync(path.resolve(process.cwd(), resultFolder))) {
         fs.mkdirSync(path.resolve(process.cwd(), resultFolder), {recursive: true})
         log.info('Creating results dir')
@@ -87,23 +90,31 @@ export async function analyseFiles(folders: string[], options: { results: string
         const cache: Cache = useCache ? chooseCacheOption() : noCache
         cache.load()
 
-        const files = allFiles.filter(it => !plugin.extractor.filter ? (it) : true).filter(it => plugin.extractor.files.some(pattern => it.match(pattern)))
+        const files = allFiles.filter(it => plugin.extractor.filter ? plugin.extractor.filter(it) : true).filter(it => plugin.extractor.files.some(pattern => it.match(pattern)))
 
         const projects: DepinderProject[] = await extractProjects(plugin, files)
 
+        const multiProgressBar = new MultiBar({}, Presets.shades_grey)
+
+        const projectsBar = multiProgressBar.create(projects.length, 0, {name: 'Projects', state: 'Analysing'})
+
+
         for (const project of projects) {
             log.info(`Plugin ${plugin.name} analyzing project ${project.name}@${project.version}`)
+            const dependencies = Object.values(project.dependencies)
+            const depProgressBar = multiProgressBar.create(dependencies.length, 0, {name: 'Deps', state: 'Analysing deps'})
+
             for (const dep of Object.values(project.dependencies)) {
                 try {
                     let lib
                     if (await cache.has(`${plugin.name}:${dep.name}`)) {
                         lib = await cache.get(`${plugin.name}:${dep.name}`) as LibraryInfo
                     } else {
-                        log.info(`Getting remote information on ${dep.name}`)
+                        // log.info(`Getting remote information on ${dep.name}`)
 
                         lib = await plugin.registrar.retrieve(dep.name)
                         if (plugin.checker?.githubSecurityAdvisoryEcosystem) {
-                            log.info(`Getting vulnerabilities for ${lib.name}`)
+                            // log.info(`Getting vulnerabilities for ${lib.name}`)
                             lib.vulnerabilities = await getVulnerabilitiesFromGithub(plugin.checker.githubSecurityAdvisoryEcosystem, lib.name)
                         }
                         await cache.set(`${plugin.name}:${dep.name}`, lib)
@@ -115,20 +126,27 @@ export async function analyseFiles(folders: string[], options: { results: string
                             const range = new Range(it.vulnerableRange?.replaceAll(',', ' ') ?? '')
                             return range.test(dep.version)
                         } catch (e: any) {
-                            log.warn(`Vulnerable range unknown: ${it.vulnerableRange}`)
+                            // log.warn(`Vulnerable range unknown: ${it.vulnerableRange}`)
                             return false
                         }
                     })
                     dep.vulnerabilities = thisVersionVulnerabilities || []
                 } catch (e: any) {
-                    log.warn(`Exception getting remote info for ${dep.name}`)
+                    // log.warn(`Exception getting remote info for ${dep.name}`)
                 }
+                depProgressBar.increment()
             }
+            depProgressBar.stop()
+            projectsBar.increment()
         }
+        projectsBar.stop()
+
+        multiProgressBar.stop()
 
         await cache.write()
 
         const allLibsInfo = projects.flatMap(proj => Object.values(proj.dependencies).map(dep => dep.libraryInfo))
+            .filter(it => it !== undefined && it != null).map(it => it as LibraryInfo)
 
         const allLicenses = _.groupBy(allLibsInfo, (lib: LibraryInfo) => {
             const license: string | undefined = lib.versions.flatMap(it => it.licenses).find(() => true)
@@ -186,6 +204,7 @@ export async function analyseFiles(folders: string[], options: { results: string
         }).join('\n'))
     }
 
+    log.info(`Results are written to ${path.resolve(process.cwd(), resultFolder)}`)
     log.info('Done')
 }
 
