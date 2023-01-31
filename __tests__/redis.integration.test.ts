@@ -1,9 +1,9 @@
 import {redisDownAction, redisInfoAction, redisInitAction, redisUpAction} from '../src/commands/redis'
 
 describe('test redis commands', () => {
-    // it('test redis info', async () => {
-    //     redisInfoAction()
-    // })
+    it('test redis info', async () => {
+        redisInfoAction()
+    })
     // it('test redis init', async () => {
     //     redisInitAction()
     // })
