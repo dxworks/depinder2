@@ -27,7 +27,7 @@ const parser: Parser = {
     parseDependencyTree: parseLockFile,
 }
 
-function transformDeps(tree: any) {
+function transformDeps(tree: any, root: string) {
 
     const result: { [id: string]: DepinderDependency } = {}
 
@@ -36,13 +36,13 @@ function transformDeps(tree: any) {
     Object.keys(tree.specs).forEach(specName => {
         const value = tree.specs[specName]
         const id = `${specName}@${value.version}`
-        result[specName] = {
+        result[id] = {
             id,
             name: specName,
             version: value.version,
             semver: semver.coerce(value.version),
             type: value.type,
-            requestedBy: {},
+            requestedBy: [],
         } as DepinderDependency
     })
 
@@ -50,20 +50,22 @@ function transformDeps(tree: any) {
         const value = tree.specs[specName]
         const id = `${specName}@${value.version}`
         Object.keys(value).filter(it => !['version', 'remote', 'type'].includes(it)).forEach(spec => {
-            const cachedValue = result[spec] as DepinderDependency
-            if (cachedValue) {
-                cachedValue.requestedBy[id] = value[spec].version
+            const cachedValue = result[id] as DepinderDependency
+            if (cachedValue && value[spec].version) {
+                cachedValue.requestedBy =[...cachedValue.requestedBy, id]
             }
         })
     })
 
     // TODO: read Gemfile and add the requestedBy field for the direct dependencies
-    // directDeps.forEach(dep => {
-    //     const cachedValue = result[dep] as DepinderDependency
-    //     if(cachedValue) {
-    //         cachedValue.requestedBy = [...cachedValue.requestedBy, {id: tree, requestedVersion: tree.]
-    //     }
-    // })
+    directDeps.forEach(dep => {
+        const key = Object.keys(result).find(it => it.startsWith(`${dep}@`))
+        if(!key) return
+        const cachedValue = result[key] as DepinderDependency
+        if(cachedValue) {
+            cachedValue.requestedBy = [...cachedValue.requestedBy, root]
+        }
+    })
 
     return result
 }
@@ -75,7 +77,7 @@ function parseLockFile({root, lockFile}: DependencyFileContext): DepinderProject
         name: path.basename(root),
         path: root,
         version: '',
-        dependencies: transformDeps(result),
+        dependencies: transformDeps(result, `${path.basename(root)}@`),
     } as DepinderProject
 }
 

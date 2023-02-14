@@ -25,6 +25,7 @@ export interface DependencyFileContext {
     root: string // the root folder of the project
     manifestFile?: string // the file where direct dependencies are specified + other project information
     lockFile: string // the file to parse to get the dependency tree
+    type? :string // the type of the project, especially useful in Java where there are multiple types of projects  (e.g. maven, gradle, etc.)
 }
 
 export interface DepinderProject {
@@ -42,7 +43,7 @@ export interface DepinderDependency {
     version: string
     semver: SemVer | null
     type?: string  // dev dependency, test dependency, provided, etc.
-    requestedBy: {[id: string]: string } // if requested by root project the list will be falsy
+    requestedBy: string[] // the list of ids for dependencies that requested this dependency
     libraryInfo?: LibraryInfo
     vulnerabilities?: Vulnerability[]
 }

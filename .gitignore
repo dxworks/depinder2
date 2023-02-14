@@ -120,5 +120,8 @@ dist
 *.iml
 
 # custom
+results
+cache
 results-*
 ./cache
+/.blacklist

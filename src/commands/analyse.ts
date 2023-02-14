@@ -18,28 +18,34 @@ import {redisCache} from '../cache/redis-cache'
 import {Vulnerability} from '../extension-points/vulnerability-checker'
 import {MultiBar, Presets} from 'cli-progress'
 import {walkDir} from '../utils/utils'
+import {blacklistedGlobs} from '../utils/blacklist'
+import minimatch from 'minimatch'
+// import {defaultPlugins} from '../extension-points/plugin-loader'
 // eslint-disable-next-line @typescript-eslint/no-var-requires
 const licenseIds = require('spdx-license-ids/')
+
+// eslint-disable-next-line @typescript-eslint/no-var-requires
+require('events').EventEmitter.prototype._maxListeners = 100
 
 export const analyseCommand = new Command()
     .name('analyse')
     .argument('[folders...]', 'A list of folders to walk for files')
-    .argument('[depext-files...]', 'A list of files to parse for dependency information')
+    // .argument('[depext-files...]', 'A list of files to parse for dependency information')
     .option('--results, -r', 'The results folder', 'results')
     .action(analyseFiles)
 
 
 function convertDepToRow(proj: DepinderProject, dep: DepinderDependency): string {
     const latestVersion = dep.libraryInfo?.versions.find(it => it.latest)
-    const currentVersion = dep.libraryInfo?.versions.find(it => it.version == dep.version)
+    const currentVersion = dep.libraryInfo?.versions.find(it => it.version == dep.version.trim())
     const latestVersionMoment = moment(latestVersion?.timestamp)
     const currentVersionMoment = moment(currentVersion?.timestamp)
     const now = moment()
 
     const dateFormat = 'MMM YYYY'
     const vulnerabilities = dep.vulnerabilities?.map(v => `${v.severity} - ${v.permalink}`).join('\n')
-    const directDep: boolean = !dep.requestedBy || Object.keys(dep.requestedBy).some(it => it.startsWith(`${proj.name}@${proj.version}`))
-    return `${proj.path},${proj.name},${dep.name},${dep.version},${latestVersion?.version},${currentVersionMoment?.format(dateFormat)},${latestVersionMoment?.format(dateFormat)},${latestVersionMoment?.diff(currentVersionMoment, 'months')},${now?.diff(currentVersionMoment, 'months')},${now?.diff(latestVersionMoment, 'months')},${dep.vulnerabilities?.length},"${vulnerabilities}",${directDep},${dep.type},"${dep.libraryInfo?.licenses}"`
+    const directDep: boolean = !dep.requestedBy || dep.requestedBy.some(it => it.startsWith(`${proj.name}@${proj.version}`))
+    return `${proj.path},${proj.name},${dep.name},${dep.version},${latestVersion?.version},${currentVersionMoment?.format(dateFormat)},${latestVersionMoment?.format(dateFormat)},${latestVersionMoment?.diff(currentVersionMoment, 'months')},${now?.diff(currentVersionMoment, 'months')},${now?.diff(latestVersionMoment, 'months')},${dep.vulnerabilities?.length},"${vulnerabilities}",${directDep},${dep.type},"${dep.libraryInfo?.licenses?.map(it => {if(typeof it === 'string') return it.substring(0,100); else return JSON.stringify(it)})}"`
 }
 
 async function extractProjects(plugin: Plugin, files: string[]) {
@@ -98,9 +104,11 @@ export async function analyseFiles(folders: string[], options: { results: string
         for (const project of projects) {
             log.info(`Plugin ${plugin.name} analyzing project ${project.name}@${project.version}`)
             const dependencies = Object.values(project.dependencies)
+            const filteredDependencies = dependencies.filter(it => !blacklistedGlobs.some(glob => minimatch(it.name, glob)))
+                .filter(it => it.requestedBy.includes(`${project.name}@${project.version}`) )  //TODO: This is a hack to remove transitive dependencies, but it's not working
             const depProgressBar = multiProgressBar.create(dependencies.length, 0, {name: 'Deps', state: 'Analysing deps'})
 
-            for (const dep of Object.values(project.dependencies)) {
+            for (const dep of filteredDependencies) {
                 try {
                     let lib
                     if (await cache.has(`${plugin.name}:${dep.name}`)) {
@@ -128,7 +136,7 @@ export async function analyseFiles(folders: string[], options: { results: string
                     })
                     dep.vulnerabilities = thisVersionVulnerabilities || []
                 } catch (e: any) {
-                    // log.warn(`Exception getting remote info for ${dep.name}`)
+                    log.warn(`Exception getting remote info for ${dep.name}`)
                 }
                 depProgressBar.increment()
             }
@@ -166,11 +174,11 @@ export async function analyseFiles(folders: string[], options: { results: string
         fs.writeFileSync(path.resolve(process.cwd(), resultFolder, `${plugin.name}-project-stats.csv`), projectStatsHeader + projects.map(proj => {
             const enhancedDeps: DependencyInfo[] = Object.values(proj.dependencies).map(dep => {
                 const latestVersion = dep.libraryInfo?.versions.find(it => it.latest)
-                const currentVersion = dep.libraryInfo?.versions.find(it => it.version == dep.version)
+                const currentVersion = dep.libraryInfo?.versions.find(it => it.version == dep.version.trim())
                 const latestVersionMoment = moment(latestVersion?.timestamp)
                 const currentVersionMoment = moment(currentVersion?.timestamp)
                 const now = moment()
-                const directDep: boolean = !dep.requestedBy || Object.keys(dep.requestedBy).some(it => it.startsWith(`${proj.name}@${proj.version}`))
+                const directDep: boolean = !dep.requestedBy || dep.requestedBy.some(it => it.startsWith(`${proj.name}@${proj.version}`))
 
                 return {
                     ...dep,

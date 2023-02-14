@@ -1,4 +1,7 @@
 import {Vulnerability} from './vulnerability-checker'
+import fetch from 'node-fetch'
+import moment from 'moment/moment'
+import {delay} from '../utils/utils'
 
 export interface Registrar {
     retrieve: RegistryRetriever
@@ -13,6 +16,7 @@ interface LibraryVersion {
     downloads?: number
     latest: boolean
 }
+
 export interface LibraryInfo {
     name: string
     description?: string
@@ -28,4 +32,61 @@ export interface LibraryInfo {
     authors?: string[],
     vulnerabilities?: Vulnerability[]
     requiresLicenseAcceptance?: boolean
+}
+
+export abstract class AbstractRegistrar implements Registrar {
+
+    private readonly next: Registrar | null = null
+
+    constructor(next: Registrar | null = null) {
+        this.next = next
+    }
+
+    public async retrieve(libraryName: string): Promise<LibraryInfo> {
+        try {
+            return await this.retrieveFromRegistry(libraryName)
+        } catch (e) {
+            if (this.next) {
+                return this.next.retrieve(libraryName)
+            }
+            else throw e
+        }
+    }
+    abstract retrieveFromRegistry(libraryName: string) : LibraryInfo | Promise<LibraryInfo>
+}
+
+export type RegistryType = 'maven' | 'npm' | 'pypi'
+
+export class LibrariesIORegistrar extends AbstractRegistrar {
+    private registryType: RegistryType
+
+    constructor(registryType: RegistryType) {
+        super()
+        this.registryType = registryType
+    }
+
+    async retrieveFromRegistry(libraryName: string): Promise<LibraryInfo> {
+        await delay(500)
+        const librariesIoURL = `https://libraries.io/api/${this.registryType}/${libraryName}?api_key=${process.env.LIBRARIES_IO_API_KEY}`
+        const librariesIoResponse: any = await fetch(librariesIoURL)
+        const libIoData = await librariesIoResponse.json()
+
+        return {
+            name: libraryName,
+            versions: libIoData.versions.map((it: any) => {
+                return {
+                    version: it.number,
+                    timestamp: moment(it.published_at).valueOf(),
+                    latest: it.number === libIoData.latest_release_number,
+                    licenses: [],
+                }
+            }),
+            description: libIoData?.description ?? '',
+            licenses: libIoData.licenses ? [libIoData.licenses] : [],
+            homepageUrl: libIoData?.homepage ?? '',
+            keywords: libIoData?.keywords ?? [],
+            reposUrl: libIoData?.repository_url ? [libIoData.repository_url] : [],
+        }
+    }
+    
 }

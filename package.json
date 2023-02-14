@@ -1,6 +1,6 @@
 {
   "name": "@dxworks/depinder",
-  "version": "0.0.3",
+  "version": "0.0.5",
   "description": "",
   "keywords": [
     "dxworks",
@@ -47,13 +47,19 @@
     "csv": "^6.0.4",
     "dotenv": "^16.0.3",
     "lodash": "^4.17.21",
+    "minimatch": "^6.1.6",
     "moment": "^2.29.1",
+    "node-html-parser": "^6.1.4",
     "npm-registry-fetch": "^12.0.1",
     "packageurl-js": "^0.0.5",
+    "pom-parser": "^1.2.0",
+    "puppeteer": "18.0.1",
     "redis": "^4.5.1",
     "semver": "^7.3.5",
+    "snyk-gradle-plugin": "^3.25.2",
     "snyk-nodejs-lockfile-parser": "^1.38.0",
-    "tmp": "^0.2.1"
+    "tmp": "^0.2.1",
+    "toml": "^3.0.0"
   },
   "devDependencies": {
     "@types/cli-progress": "^3.9.2",

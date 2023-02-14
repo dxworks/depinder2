@@ -35,14 +35,12 @@ const extractor: Extractor = {
             .map(context => {
                 try {
                     log.info(`Trying to generate lock file for ${context.root}`)
-                npm.install('', '--package-lock-only', context.root)
-                return {
-                    ...context,
-                    lockFile: path.resolve(context.root, 'package-lock.json'),
-                }
-                }
-                catch (e: any)
-                {
+                    npm.install('', '--package-lock-only', context.root)
+                    return {
+                        ...context,
+                        lockFile: path.resolve(context.root, 'package-lock.json'),
+                    }
+                } catch (e: any) {
                     log.error(e)
                     return null
                 }
@@ -65,7 +63,7 @@ function recursivelyTransformDeps(tree: DepTreeDep, result: Map<string, Depinder
         const id = `${dep.name}@${dep.version}`
         const cachedVersion = result.get(id)
         if (cachedVersion) {
-            cachedVersion.requestedBy[rootId] = dep.version ?? ''
+            cachedVersion.requestedBy = [rootId, ...cachedVersion.requestedBy]
         } else {
             try {
                 const semver = new SemVer(dep.version ?? '', true)
@@ -74,7 +72,7 @@ function recursivelyTransformDeps(tree: DepTreeDep, result: Map<string, Depinder
                     version: dep.version,
                     name: dep.name,
                     semver: semver,
-                    requestedBy: {[rootId]: dep.version},
+                    requestedBy: [rootId],
                 } as DepinderDependency)
             } catch (e) {
                 log.warn(`Invalid version! ${e}`)
@@ -136,7 +134,7 @@ const checker: VulnerabilityChecker = {
 }
 
 export const javascript: Plugin = {
-    name: 'javascript',
+    name: 'npm',
     extractor,
     parser,
     registrar,

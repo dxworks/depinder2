@@ -36,7 +36,6 @@ export const jsonCache: Cache = {
     },
     write() {
         fs.writeFileSync(path.resolve(process.cwd(), 'cache', 'libs.json'), JSON.stringify(Object.fromEntries(libMap)))
-
     },
     load() {
         libMap = loadCache()
