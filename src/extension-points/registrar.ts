@@ -55,10 +55,11 @@ export abstract class AbstractRegistrar implements Registrar {
     abstract retrieveFromRegistry(libraryName: string) : LibraryInfo | Promise<LibraryInfo>
 }
 
-export type RegistryType = 'maven' | 'npm' | 'pypi'
+// Get data from libraries.io API: https://libraries.io/api#project-dependencies
+export type RegistryType = 'maven' | 'npm' | 'pypi' | 'nuget'
 
 export class LibrariesIORegistrar extends AbstractRegistrar {
-    private registryType: RegistryType
+    private readonly registryType: RegistryType
 
     constructor(registryType: RegistryType) {
         super()

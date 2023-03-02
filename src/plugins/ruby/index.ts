@@ -15,7 +15,7 @@ import {VulnerabilityChecker} from '../../extension-points/vulnerability-checker
 import {Plugin} from '../../extension-points/plugin'
 
 const extractor: Extractor = {
-    files: ['Gemfile', '.*\\.gemspec', 'Gemfile.lock'],
+    files: ['Gemfile', '*.gemspec', 'Gemfile.lock'],
     createContexts: files =>
         files.filter(it => it.endsWith('Gemfile.lock')).map(it => ({
             root: path.dirname(it),

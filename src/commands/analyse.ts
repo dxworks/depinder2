@@ -45,28 +45,30 @@ function convertDepToRow(proj: DepinderProject, dep: DepinderDependency): string
     const dateFormat = 'MMM YYYY'
     const vulnerabilities = dep.vulnerabilities?.map(v => `${v.severity} - ${v.permalink}`).join('\n')
     const directDep: boolean = !dep.requestedBy || dep.requestedBy.some(it => it.startsWith(`${proj.name}@${proj.version}`))
-    return `${proj.path},${proj.name},${dep.name},${dep.version},${latestVersion?.version},${currentVersionMoment?.format(dateFormat)},${latestVersionMoment?.format(dateFormat)},${latestVersionMoment?.diff(currentVersionMoment, 'months')},${now?.diff(currentVersionMoment, 'months')},${now?.diff(latestVersionMoment, 'months')},${dep.vulnerabilities?.length},"${vulnerabilities}",${directDep},${dep.type},"${dep.libraryInfo?.licenses?.map(it => {if(typeof it === 'string') return it.substring(0,100); else return JSON.stringify(it)})}"`
+    return `${proj.path},${proj.name},${dep.name},${dep.version},${latestVersion?.version},${currentVersionMoment?.format(dateFormat)},${latestVersionMoment?.format(dateFormat)},${latestVersionMoment?.diff(currentVersionMoment, 'months')},${now?.diff(currentVersionMoment, 'months')},${now?.diff(latestVersionMoment, 'months')},${dep.vulnerabilities?.length},"${vulnerabilities}",${directDep},${dep.type},"${dep.libraryInfo?.licenses?.map(it => {
+        if (typeof it === 'string') return it.substring(0, 100); else return JSON.stringify(it)
+    })}"`
 }
 
 async function extractProjects(plugin: Plugin, files: string[]) {
-    return (await Promise.all(plugin.extractor.createContexts(files).flatMap(async context => {
+    const projects = [] as DepinderProject[]
+
+    for (const context of plugin.extractor.createContexts(files)) {
         log.info(`Parsing dependency tree information for ${JSON.stringify(context)}`)
         try {
             if (!plugin.parser) {
                 log.info(`Plugin ${plugin.name} does not have a parser!`)
-                return null
+                continue
             }
             const proj: DepinderProject = await plugin.parser.parseDependencyTree(context)
             log.info(`Done parsing dependency tree information for ${JSON.stringify(context)}`)
-            return proj
+            projects.push(proj)
         } catch (e: any) {
             log.warn(`Exception parsing dependency tree information for ${JSON.stringify(context)}`)
             log.error(e)
         }
-        return null
-    })))
-        .filter(it => it != null)
-        .map(it => it as DepinderProject)
+    }
+    return projects
 }
 
 function chooseCacheOption(): Cache {
@@ -92,7 +94,11 @@ export async function analyseFiles(folders: string[], options: { results: string
         const cache: Cache = useCache ? chooseCacheOption() : noCache
         cache.load()
 
-        const files = allFiles.filter(it => plugin.extractor.filter ? plugin.extractor.filter(it) : true).filter(it => plugin.extractor.files.some(pattern => it.match(pattern)))
+        const files = allFiles
+            .filter(it => plugin.extractor.filter ? plugin.extractor.filter(it) : true)
+            .filter(it => plugin.extractor.files
+                .some(pattern => minimatch(it, pattern, {matchBase: true}))
+            )
 
         const projects: DepinderProject[] = await extractProjects(plugin, files)
 
@@ -105,8 +111,10 @@ export async function analyseFiles(folders: string[], options: { results: string
             log.info(`Plugin ${plugin.name} analyzing project ${project.name}@${project.version}`)
             const dependencies = Object.values(project.dependencies)
             const filteredDependencies = dependencies.filter(it => !blacklistedGlobs.some(glob => minimatch(it.name, glob)))
-                .filter(it => it.requestedBy.includes(`${project.name}@${project.version}`) )  //TODO: This is a hack to remove transitive dependencies, but it's not working
-            const depProgressBar = multiProgressBar.create(dependencies.length, 0, {name: 'Deps', state: 'Analysing deps'})
+            const depProgressBar = multiProgressBar.create(dependencies.length, 0, {
+                name: 'Deps',
+                state: 'Analysing deps',
+            })
 
             for (const dep of filteredDependencies) {
                 try {
@@ -194,9 +202,9 @@ export async function analyseFiles(folders: string[], options: { results: string
             const outdatedThreshold = 15
 
             const directOutdated = directDeps.filter(dep => dep.latest_used > outdatedThreshold)
-            const directOutDatedPercent = directOutdated.length / directDeps.length * 100
+            const directOutDatedPercent = directDeps.length == 0 ? 0 : directOutdated.length / directDeps.length * 100
             const indirectOutdated = indirectDeps.filter(dep => dep.latest_used > outdatedThreshold)
-            const indirectOutDatedPercent = indirectOutdated.length / indirectDeps.length * 100
+            const indirectOutDatedPercent = indirectDeps.length == 0 ? 0 : indirectOutdated.length / indirectDeps.length * 100
             const directVulnerable = directDeps.filter(dep => dep.vulnerabilities && dep.vulnerabilities.length > 0)
             const indirectVulnerable = indirectDeps.filter(dep => dep.vulnerabilities && dep.vulnerabilities.length > 0)
 

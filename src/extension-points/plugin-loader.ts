@@ -3,6 +3,7 @@ import {Plugin} from './plugin'
 import {ruby} from '../plugins/ruby'
 import {java} from '../plugins/java'
 import {python} from '../plugins/python'
+import {dotnet} from '../plugins/dotnet'
 
 export const defaultPlugins: Plugin[] = [
     javascript,
@@ -10,5 +11,5 @@ export const defaultPlugins: Plugin[] = [
     java,
     python,
     // php,
-    // dotnet,
+    dotnet,
 ]
