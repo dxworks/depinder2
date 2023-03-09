@@ -2,6 +2,8 @@ on:
   push:
     tags:
       - 'v*'
+    branches:
+      - 'release-*'
 
 name: Create Release
 
@@ -20,13 +22,13 @@ jobs:
         id: semver_parser
         run: |
           semver=${TAG#"refs/tags/v"}
-          semver=${semver%"-voyager"}
+          semver=${TAG#"refs/tags/release-"}
           echo ::set-output name=semver::$semver
         env:
           TAG: ${{ github.ref }}
 
       - name: Setup Node
-        uses: actions/setup-node@v2
+        uses: actions/setup-node@v3
         with:
           node-version: '18.x'
           cache: 'npm'
