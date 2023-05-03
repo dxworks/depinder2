@@ -56,17 +56,22 @@ The following commands can be used either as standalone, or with the `dxw` prefi
 
 ### Redis Cache
 
-To check if the redis cache is running:
+To check if the Redis cache is running:
 ```shell
 depinder redis
 ```
 
-To start the Redus cache:
+To initalise the Redis cache:
+```shell
+depinder redis init
+```
+
+To start the Redis cache:
 ```shell
 depinder redis start
 ```
 
-To stop the Redus cache:
+To stop the Redis cache:
 ```shell
 depinder redis stop
 ```
