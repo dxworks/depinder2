@@ -76,7 +76,7 @@ To stop the Redis cache:
 depinder redis stop
 ```
 
-To see what is available in the cache, please visit the [Redis Stack Dashboard](http://localhost:8081/).
+To see what is available in the cache, please visit the [Redis Stack Dashboard](http://localhost:8001/).
 
 ### Analyse
 To analyse a project, run the following command:
