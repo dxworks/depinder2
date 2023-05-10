@@ -22,6 +22,11 @@ To check if the installation was successful, run:
 depinder --version
 ```
 
+## Configuration
+`Depinder` relies on `GitHub` and `Libraries.io` to get information about packages and known security vulnerabilities. In order to call these downstream services, you need to add two environment variables with the corresponding tokens:
+- `GH_TOKEN` should contain a `GitHub` token with the `read:packages` scope.
+- `LIBRARIES_IO_API_KEY` should contain the `Libraries.io` API Key.
+
 ## Preprocess data
 If you want to run `Depinder` on a project that has not been processed by `Depminer` before, 
 you need to run the following command to generate the folder structure:
