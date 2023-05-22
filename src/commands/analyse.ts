@@ -35,6 +35,12 @@ export const analyseCommand = new Command()
     .action(analyseFiles)
 
 
+function extractLicenses(dep: DepinderDependency) {
+    return dep.libraryInfo?.licenses?.map(it => {
+        if (typeof it === 'string') return it.substring(0, 100); else return JSON.stringify(it)
+    })
+}
+
 function convertDepToRow(proj: DepinderProject, dep: DepinderDependency): string {
     const latestVersion = dep.libraryInfo?.versions.find(it => it.latest)
     const currentVersion = dep.libraryInfo?.versions.find(it => it.version == dep.version.trim())
@@ -45,9 +51,7 @@ function convertDepToRow(proj: DepinderProject, dep: DepinderDependency): string
     const dateFormat = 'MMM YYYY'
     const vulnerabilities = dep.vulnerabilities?.map(v => `${v.severity} - ${v.permalink}`).join('\n')
     const directDep: boolean = !dep.requestedBy || dep.requestedBy.some(it => it.startsWith(`${proj.name}@${proj.version}`))
-    return `${proj.path},${proj.name},${dep.name},${dep.version},${latestVersion?.version},${currentVersionMoment?.format(dateFormat)},${latestVersionMoment?.format(dateFormat)},${latestVersionMoment?.diff(currentVersionMoment, 'months')},${now?.diff(currentVersionMoment, 'months')},${now?.diff(latestVersionMoment, 'months')},${dep.vulnerabilities?.length},"${vulnerabilities}",${directDep},${dep.type},"${dep.libraryInfo?.licenses?.map(it => {
-        if (typeof it === 'string') return it.substring(0, 100); else return JSON.stringify(it)
-    })}"`
+    return `${proj.path},${proj.name},${dep.name},${dep.version},${latestVersion?.version},${currentVersionMoment?.format(dateFormat)},${latestVersionMoment?.format(dateFormat)},${latestVersionMoment?.diff(currentVersionMoment, 'months')},${now?.diff(currentVersionMoment, 'months')},${now?.diff(latestVersionMoment, 'months')},${dep.vulnerabilities?.length},"${vulnerabilities}",${directDep},${dep.type},"${extractLicenses(dep)}"`
 }
 
 async function extractProjects(plugin: Plugin, files: string[]) {

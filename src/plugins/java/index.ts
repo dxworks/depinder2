@@ -8,18 +8,19 @@ import {Plugin} from '../../extension-points/plugin'
 import fs from 'fs'
 import {depinderTempFolder} from '../../utils/utils'
 import {log} from '@dxworks/cli-common'
+import {parseMavenDependencyTree} from './parsers/maven'
 
 // eslint-disable-next-line @typescript-eslint/no-var-requires
 const pomParser = require('pom-parser')
 
 const extractor: Extractor = {
-    files: ['pom.json', 'build.gradle', 'build.gradle.kts'],
+    files: ['pom.xml', 'build.gradle', 'build.gradle.kts'],
     createContexts: files => {
 
-        const pomContexts = files.filter(it => it.endsWith('pom.json')).map(it => ({
+        const pomContexts = files.filter(it => it.endsWith('pom.xml')).map(it => ({
             root: path.dirname(it),
-            lockFile: path.basename(it),
-            type: 'maven-with-dep-tree',
+            lockFile: 'deptree.txt',
+            type: 'maven',
         } as DependencyFileContext))
 
         const gradleContexts = files.filter(it => it.endsWith('build.gradle') || it.endsWith('build.gradle.kts')).map(it => ({
@@ -38,21 +39,34 @@ const parser: Parser = {
 }
 
 function parseLockFile(context: DependencyFileContext): DepinderProject {
-    if (context.type === 'maven-with-dep-tree') {
-        return JSON.parse(fs.readFileSync(path.resolve(context.root, context.lockFile)).toString()) as DepinderProject
-    }
-
-    if (context.type === 'gradle') {
-        if (fs.existsSync(path.resolve(context.root, context.lockFile))) {
-            const proj = JSON.parse(fs.readFileSync(path.resolve(context.root, context.lockFile)).toString()) as DepinderProject
-            return {
-                ...proj,
-                dependencies: Object.entries(proj.dependencies).filter(([, value]) =>
-                    value.requestedBy.includes(`${proj.name}@${proj.version}`)
-                ).reduce((acc, [key, value]) => ({...acc, [key]: value}), {}),
-            }
+    if(context.type === 'maven') {
+        if(!fs.existsSync(path.resolve(context.root, context.lockFile))) {
+            throw new Error(`Dependency tree file not found: ${path.resolve(context.root, context.lockFile)}`)
         }
+        const depTreeContent = fs.readFileSync(path.resolve(context.root, context.lockFile)).toString()
+
+        const depinderProject = parseMavenDependencyTree(depTreeContent)
+        depinderProject.path = path.resolve(context.root, context.manifestFile??'pom.xml')
+        return depinderProject
     }
+    else if(context.type === 'gradle') {
+        throw new Error(`Unsupported context type: ${context.type}. Gradle is not supported yet!`)
+    }
+    // if (context.type === 'maven-with-dep-tree') {
+    //     return JSON.parse(fs.readFileSync(path.resolve(context.root, context.lockFile)).toString()) as DepinderProject
+    // }
+    //
+    // if (context.type === 'gradle') {
+    //     if (fs.existsSync(path.resolve(context.root, context.lockFile))) {
+    //         const proj = JSON.parse(fs.readFileSync(path.resolve(context.root, context.lockFile)).toString()) as DepinderProject
+    //         return {
+    //             ...proj,
+    //             dependencies: Object.entries(proj.dependencies).filter(([, value]) =>
+    //                 value.requestedBy.includes(`${proj.name}@${proj.version}`)
+    //             ).reduce((acc, [key, value]) => ({...acc, [key]: value}), {}),
+    //         }
+    //     }
+    // }
 
     throw new Error(`Unsupported context type: ${context.type}`)
 }
