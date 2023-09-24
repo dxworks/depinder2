@@ -101,16 +101,25 @@ export class MavenCentralRegistrar extends AbstractRegistrar {
         const [groupId, artifactId] = libraryName.split(':')
 
         const abortController = new AbortController()
-        setTimeout(() => abortController.abort(), 5000)
+        setTimeout(() => abortController.abort(), 10000)
 
-        const mavenSearchURL = `https://search.maven.org/solrsearch/select?q=g:"${groupId}" AND a:"${artifactId}"&core=gav&wt=json`
+        const rows = 200
+        let start = 0
+        const mavenSearchURL = `https://search.maven.org/solrsearch/select?q=g:"${groupId}" AND a:"${artifactId}"&core=gav&wt=json&rows=${rows}&start=${start}`
         const mavenResponse: any = await fetch(mavenSearchURL, {signal: abortController.signal})
         const mavenData = await mavenResponse.json()
-        const docs = mavenData.response.docs
+        let docs = mavenData.response.docs
+
+        while (docs.length < mavenData.response.numFound) {
+            start += rows
+            const mavenResponse: any = await fetch(mavenSearchURL, {signal: abortController.signal})
+            const mavenData = await mavenResponse.json()
+            docs = [...docs, ...mavenData.response.docs]
+        }
 
         let pom: any
         try {
-            await this.getPom(groupId, artifactId, docs, libraryName)
+            pom = (await this.getPom(groupId, artifactId, docs, libraryName)).pomObject
         } catch (e) {
             log.warn(`Failed to get pom for ${libraryName}`)
             throw e
@@ -125,9 +134,9 @@ export class MavenCentralRegistrar extends AbstractRegistrar {
                     licenses: [],
                 }
             }),
-            description: pom?.project.description ?? '',
-            licenses: pom?.project.licenses ? [pom?.project.licenses.map((it: any) => it.name)] : [],
-            reposUrl: pom?.project.scm ? [pom?.project.scm.connection] : [],
+            description: pom?.project?.description ?? '',
+            licenses: pom?.project?.licenses?.license ? [pom?.project.licenses.license.name] : [],
+            reposUrl: pom?.project?.scm ? [pom?.project.scm.connection] : [],
             issuesUrl: pom?.project?.issueManagement?.url ? [pom?.project.issueManagement.url] : [],
         }
     }
@@ -149,6 +158,7 @@ const javaRegistrar = new MavenCentralRegistrar(new LibrariesIORegistrar('maven'
 
 export const java: Plugin = {
     name: 'java',
+    aliases: ['maven', 'gradle'],
     extractor,
     parser,
     registrar: javaRegistrar,

@@ -1,5 +1,5 @@
 import * as fs from 'fs'
-import {getPackageDetails, IPackagistPackageVersionDetails} from '../../plugins/php/info'
+import {getPackageDetails, IPackagistPackageVersionDetails} from '../../plugins/php/php-interfaces'
 
 export interface ComposerSupport {
     email?: string

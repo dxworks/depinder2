@@ -7,8 +7,8 @@ on:
 
 
 jobs:
-  release:
-    name: Publish NPM Package & Create Release
+  publish-npm-package:
+    name: Publish NPM Package
     runs-on: ubuntu-latest
     permissions:
       contents: write

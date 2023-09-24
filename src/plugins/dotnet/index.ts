@@ -89,7 +89,7 @@ export async function runNugetInspector(context: DependencyFileContext): Promise
     const tempFile = path.resolve(`${context.manifestFile}.json`)
     if (!fs.existsSync(tempFile)) {
         try {
-            const output = await runNuGetInspectorProgrammatically(context.root, tempFile, process.cwd())
+            await runNuGetInspectorProgrammatically(context.root, tempFile, process.cwd())
         } catch (e) {
             log.error(e)
             throw new Error(`NuGet Inspector failed for project ${context.root}`)
@@ -150,6 +150,7 @@ export const registrar: Registrar = new NugetRegistrar(new NugetRegistrarSemver2
 
 export const dotnet: Plugin = {
     name: 'dotnet',
+    aliases: ['.net', 'c#', 'csharp', 'nuget'],
     extractor,
     parser,
     registrar,

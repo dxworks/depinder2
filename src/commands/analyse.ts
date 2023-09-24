@@ -1,7 +1,7 @@
 import {Command} from 'commander'
 import fs from 'fs'
 import path from 'path'
-import {plugins} from '../plugins'
+import {getPluginsFromNames} from '../plugins'
 import {DepinderDependency, DepinderProject} from '../extension-points/extract'
 import {log} from '@dxworks/cli-common'
 import {LibraryInfo} from '../extension-points/registrar'
@@ -12,14 +12,14 @@ import spdxCorrect from 'spdx-correct'
 import moment from 'moment'
 import {Plugin} from '../extension-points/plugin'
 import {Cache, noCache} from '../cache/cache'
-import {getRedisDockerContainerStatus} from './redis'
+import {getMongoDockerContainerStatus} from './cache'
 import {jsonCache} from '../cache/json-cache'
-import {redisCache} from '../cache/redis-cache'
 import {Vulnerability} from '../extension-points/vulnerability-checker'
 import {MultiBar, Presets} from 'cli-progress'
 import {walkDir} from '../utils/utils'
 import {blacklistedGlobs} from '../utils/blacklist'
 import minimatch from 'minimatch'
+import {mongoCache} from '../cache/mongo-cache'
 // import {defaultPlugins} from '../extension-points/plugin-loader'
 // eslint-disable-next-line @typescript-eslint/no-var-requires
 const licenseIds = require('spdx-license-ids/')
@@ -27,11 +27,19 @@ const licenseIds = require('spdx-license-ids/')
 // eslint-disable-next-line @typescript-eslint/no-var-requires
 require('events').EventEmitter.prototype._maxListeners = 100
 
+export interface AnalyseOptions {
+    plugins?: string[]
+    results: string
+    refresh: boolean
+}
+
 export const analyseCommand = new Command()
     .name('analyse')
     .argument('[folders...]', 'A list of folders to walk for files')
+    .option('--plugins, -p [plugins...]', 'A list of plugins')
     // .argument('[depext-files...]', 'A list of files to parse for dependency information')
     .option('--results, -r', 'The results folder', 'results')
+    .option('--refresh', 'Refresh the cache', false)
     .action(analyseFiles)
 
 
@@ -76,15 +84,23 @@ async function extractProjects(plugin: Plugin, files: string[]) {
 }
 
 function chooseCacheOption(): Cache {
-    if (getRedisDockerContainerStatus() != 'running') {
-        log.warn('Redis is not running, using in-memory cache')
+
+    if (getMongoDockerContainerStatus() != 'running') {
+        log.warn('Mongo cache is not running, using in-memory cache')
         return jsonCache
     }
-    log.info('Redis is running, using Redis cache')
-    return redisCache
+    log.info('Mongo cache is up and running, using Mongo cache')
+    return mongoCache
 }
 
-export async function analyseFiles(folders: string[], options: { results: string }, useCache = true): Promise<void> {
+async function cacheHit(cache: Cache, plugin: Plugin, dep: DepinderDependency, refresh: boolean, refreshedLibs: any[]) {
+    if (refresh && !refreshedLibs.includes(dep.name)) {
+        return false
+    }
+    return cache.has(`${plugin.name}:${dep.name}`)
+}
+
+export async function analyseFiles(folders: string[], options: AnalyseOptions, useCache = true): Promise<void> {
     const resultFolder = options.results || 'results'
     if (!fs.existsSync(path.resolve(process.cwd(), resultFolder))) {
         fs.mkdirSync(path.resolve(process.cwd(), resultFolder), {recursive: true})
@@ -92,11 +108,14 @@ export async function analyseFiles(folders: string[], options: { results: string
     }
     const allFiles = folders.flatMap(it => walkDir(it))
 
-    for (const plugin of plugins) {
+    const selectedPlugins = getPluginsFromNames(options.plugins)
+
+    for (const plugin of selectedPlugins) {
         log.info(`Plugin ${plugin.name} starting`)
 
         const cache: Cache = useCache ? chooseCacheOption() : noCache
-        cache.load()
+        await cache.load()
+        const refreshedLibs = [] as string[]
 
         const files = allFiles
             .filter(it => plugin.extractor.filter ? plugin.extractor.filter(it) : true)
@@ -123,7 +142,7 @@ export async function analyseFiles(folders: string[], options: { results: string
             for (const dep of filteredDependencies) {
                 try {
                     let lib
-                    if (await cache.has(`${plugin.name}:${dep.name}`)) {
+                    if (await cacheHit(cache, plugin, dep, options.refresh, refreshedLibs)) {
                         lib = await cache.get(`${plugin.name}:${dep.name}`) as LibraryInfo
                     } else {
                         // log.info(`Getting remote information on ${dep.name}`)
@@ -134,6 +153,7 @@ export async function analyseFiles(folders: string[], options: { results: string
                             lib.vulnerabilities = await getVulnerabilitiesFromGithub(plugin.checker.githubSecurityAdvisoryEcosystem, lib.name)
                         }
                         await cache.set(`${plugin.name}:${dep.name}`, lib)
+                        if (options.refresh) refreshedLibs.push(dep.name)
                     }
                     dep.libraryInfo = lib
                     const thisVersionVulnerabilities = lib.vulnerabilities?.filter((it: Vulnerability) => {
@@ -149,6 +169,7 @@ export async function analyseFiles(folders: string[], options: { results: string
                     dep.vulnerabilities = thisVersionVulnerabilities || []
                 } catch (e: any) {
                     log.warn(`Exception getting remote info for ${dep.name}`)
+                    log.error(e)
                 }
                 depProgressBar.increment()
             }
