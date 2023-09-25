@@ -1,16 +1,18 @@
 import {cacheDownAction, cacheInfoAction, cacheInitAction, cacheUpAction} from '../src/commands/cache'
 
 describe('test cache commands', () => {
-    it('test cache info', async () => {
+    const runOnlyLocally = process.env.CI ? test.skip : test
+
+    runOnlyLocally('test cache info', async () => {
         // cacheInfoAction()
     })
-    it('test cache init', async () => {
+    runOnlyLocally('test cache init', async () => {
         // cacheInitAction()
     })
-    it('test cache up', async () => {
+    runOnlyLocally('test cache up', async () => {
         // await cacheUpAction()
     })
-    it('test cache down', async () => {
+    runOnlyLocally('test cache down', async () => {
         // await cacheDownAction()
     })
 })
