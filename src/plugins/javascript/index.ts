@@ -26,17 +26,6 @@ const extractor: Extractor = {
             manifestFile: 'package.json',
         } as DependencyFileContext))
 
-        function getParentLockFile(packageFile: string, maxDepth = 2): string | null {
-            const dir = path.dirname(packageFile)
-            if (maxDepth < 0)
-                return null
-            if (fs.existsSync(path.resolve(dir, 'package-lock.json')))
-                return path.resolve(dir, 'package-lock.json')
-            if (fs.existsSync(path.resolve(dir, 'yarn.lock')))
-                return path.resolve(dir, 'yarn.lock')
-            return getParentLockFile(dir, maxDepth - 1)
-        }
-
         const packageJsonWithLockInParent = files.filter(it => it.endsWith('package.json'))
             .filter(packageFile => !lockFileContexts.some(it => it.root == path.dirname(packageFile)))
             .filter(packageFile => getParentLockFile(packageFile) !== null)
@@ -49,6 +38,7 @@ const extractor: Extractor = {
 
         const justPackageJson = files.filter(it => it.endsWith('package.json'))
             .filter(packageFile => !lockFileContexts.some(it => it.root == path.dirname(packageFile)))
+            .filter(packageFile => !packageJsonWithLockInParent.some(it => it.root == path.dirname(packageFile)))
             .map(it => ({
                 root: path.dirname(it),
                 manifestFile: 'package.json',
@@ -72,6 +62,18 @@ const extractor: Extractor = {
         return [...lockFileContexts, ...justPackageJson, ...packageJsonWithLockInParent]
     },
     filter: it => !it.includes('node_modules'),
+}
+
+
+function getParentLockFile(packageFile: string, maxDepth = 5): string | null {
+    const dir = path.dirname(packageFile)
+    if (maxDepth < 0)
+        return null
+    if (fs.existsSync(path.resolve(dir, 'package-lock.json')))
+        return path.resolve(dir, 'package-lock.json')
+    if (fs.existsSync(path.resolve(dir, 'yarn.lock')))
+        return path.resolve(dir, 'yarn.lock')
+    return getParentLockFile(dir, maxDepth - 1)
 }
 
 const parser: Parser = {

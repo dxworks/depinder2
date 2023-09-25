@@ -36,10 +36,10 @@ export interface AnalyseOptions {
 export const analyseCommand = new Command()
     .name('analyse')
     .argument('[folders...]', 'A list of folders to walk for files')
-    .option('--plugins, -p [plugins...]', 'A list of plugins')
     // .argument('[depext-files...]', 'A list of files to parse for dependency information')
     .option('--results, -r', 'The results folder', 'results')
     .option('--refresh', 'Refresh the cache', false)
+    .option('--plugins, -p [plugins...]', 'A list of plugins')
     .action(analyseFiles)
 
 
@@ -134,10 +134,11 @@ export async function analyseFiles(folders: string[], options: AnalyseOptions, u
             log.info(`Plugin ${plugin.name} analyzing project ${project.name}@${project.version}`)
             const dependencies = Object.values(project.dependencies)
             const filteredDependencies = dependencies.filter(it => !blacklistedGlobs.some(glob => minimatch(it.name, glob)))
-            const depProgressBar = multiProgressBar.create(dependencies.length, 0, {
+            const depProgressBar = multiProgressBar.create(filteredDependencies.length, 0, {
                 name: 'Deps',
                 state: 'Analysing deps',
             })
+            let depsWithInfo = 0
 
             for (const dep of filteredDependencies) {
                 try {
@@ -172,6 +173,8 @@ export async function analyseFiles(folders: string[], options: AnalyseOptions, u
                     log.error(e)
                 }
                 depProgressBar.increment()
+                depsWithInfo++
+                log.info(`Got remote information on ${dep.name} (${depsWithInfo}/${filteredDependencies.length})`)
             }
             depProgressBar.stop()
             projectsBar.increment()
