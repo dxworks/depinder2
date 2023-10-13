@@ -124,7 +124,7 @@ export interface IPackagistPackageDetailResponse {
  */
 export async function getPackageDetails(
     vp: VendorPackageInput
-): Promise<IPackagistPackageDetails | null> {
+): Promise<IPackagistPackageDetails> {
     console.log(`Getting info for ${vp}`)
     try {
         const response = await axios.get(`https://packagist.org/packages/${constructVPString(vp)}.json`)
@@ -132,7 +132,7 @@ export async function getPackageDetails(
     } catch (e: any) {
         console.warn(`Packagist could not find package ${constructVPString(vp)}`)
         console.error(e.message, e.stack)
-        return null
+        throw e
     }
 }
 

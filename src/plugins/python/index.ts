@@ -235,6 +235,7 @@ export const pythonRegistrar: Registrar = new PyPiRegistrar(new LibrariesIORegis
 
 export const python: Plugin = {
     name: 'python',
+    aliases: ['pip', 'pipenv', 'poetry'],
     extractor,
     parser,
     registrar: pythonRegistrar,

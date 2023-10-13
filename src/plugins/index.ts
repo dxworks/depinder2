@@ -23,3 +23,10 @@ function loadPlugins() {
 }
 
 export const plugins: Plugin[] = loadPlugins()
+
+export function getPluginsFromNames(pluginNames?: string[]): Plugin[] {
+    if(!pluginNames || pluginNames.length === 0) {
+        return plugins
+    }
+    return plugins.filter(it => pluginNames.includes(it.name) || it.aliases?.some(alias => pluginNames.includes(alias)))
+}

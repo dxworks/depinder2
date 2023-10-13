@@ -132,6 +132,7 @@ const checker: VulnerabilityChecker = {
 
 export const ruby: Plugin = {
     name: 'ruby',
+    aliases: ['gem'],
     extractor,
     parser,
     registrar,
