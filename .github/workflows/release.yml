@@ -7,8 +7,8 @@ on:
 
 
 jobs:
-  publish-npm-package:
-    name: Publish NPM Package
+  Publish-and-Release:
+    name: Publish NPM Package and Create Release
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -71,7 +71,7 @@ jobs:
         id: create_release
         uses: softprops/action-gh-release@v1
         with:
-          name: Dx ${{ steps.semver_parser.outputs.semver }}
+          name: Depinder ${{ steps.semver_parser.outputs.semver }}
           body_path: ${{ github.workspace }}/releaseNotes/v${{ steps.semver_parser.outputs.semver }}.md
           body: ""
           prerelease: false
