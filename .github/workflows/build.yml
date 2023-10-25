@@ -28,7 +28,7 @@ jobs:
 
       - name: Build Node App
         run: |
-          npm install
+          npm ci
           npm run create
         env:
           NODE_AUTH_TOKEN: ${{ secrets.GH_PACKAGES_TOKEN }}
