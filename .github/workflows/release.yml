@@ -52,18 +52,18 @@ jobs:
         env:
           NODE_AUTH_TOKEN: ${{ secrets.GH_PACKAGES_TOKEN }}
 
-#      - name: Setup Node with NPM Package Registry
-#        uses: actions/setup-node@v3
-#        with:
-#          node-version: '18.x'
-#          cache: 'npm'
-#          registry-url: 'https://registry.npmjs.org'
-#          scope: '@dxworks'
-#
-#      - name: Publish on NPM
-#        run: npm publish --access public
-#        env:
-#          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+      - name: Setup Node with NPM Package Registry
+        uses: actions/setup-node@v3
+        with:
+          node-version: '18.x'
+          cache: 'npm'
+          registry-url: 'https://registry.npmjs.org'
+          scope: '@dxworks'
+
+      - name: Publish on NPM
+        run: npm publish --access public
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
 
       - name: Prepare Release Notes
         run: touch ${{ github.workspace }}/releaseNotes/v${{ steps.semver_parser.outputs.semver }}.md
